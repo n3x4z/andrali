@@ -1,25 +1,47 @@
-import createModule from './orientation.js';
+const worker = new Worker('./hmd_orientation.js', { type: 'module' });
+import * as THREE from './three.module.js';
 
-createModule().then((Module) => {
-    const calculator = new Module.OrientationCalculator();
+const output = document.getElementById('output');
+let orientation_x,orientation_y,orientation_z
 
-    function handleOrientation(event) {
-        // Convert degrees to radians
-        const alpha = event.alpha ? (event.alpha * Math.PI) / 180 : 0;
-        const beta = event.beta ? (event.beta * Math.PI) / 180 : 0;
-        const gamma = event.gamma ? (event.gamma * Math.PI) / 180 : 0;
+window.addEventListener('deviceorientation', (event) => {
+    const alpha = event.alpha ? (event.alpha * Math.PI) / 180 : 0;
+    const beta = event.beta ? (event.beta * Math.PI) / 180 : 0;
+    const gamma = event.gamma ? (event.gamma * Math.PI) / 180 : 0;
 
-        // Update the calculator with the new Euler angles
-        calculator.updateEuler(alpha, beta, gamma);
-
-        // Retrieve the quaternion
-        const quaternion = calculator.getQuaternion();
-
-        // Update the DOM with the quaternion values
-        const output = document.getElementById('output');
-        output.textContent = `HMD Orientation: X=${quaternion[1].toFixed(2)}, Y=${quaternion[2].toFixed(2)}, Z=${quaternion[3].toFixed(2)}`;
-    }
-
-    // Add event listener for device orientation
-    window.addEventListener('deviceorientation', handleOrientation);
+    worker.postMessage({ alpha, beta, gamma });
 });
+
+worker.onmessage = (event) => {
+    const { quaternion } = event.data;
+    output.textContent = `HMD Orientation: X=${quaternion[1].toFixed(2)}, Y=${quaternion[2].toFixed(2)}, Z=${quaternion[3].toFixed(2)}`;
+
+    orientation_x = quaternion[1]
+    orientation_y = quaternion[2]
+    orientation_z = quaternion[3]
+};
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+const geometry = new THREE.BoxGeometry(1, 1, 1);
+const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+const cube = new THREE.Mesh(geometry, material);
+scene.add(cube);
+
+camera.position.z = 5;
+
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+function animate() {
+
+    cube.rotation.x += orientation_x;
+    cube.rotation.y += orientation_y;
+    cube.rotation.z += orientation_z;
+
+    renderer.render(scene, camera);
+}
+
+renderer.setAnimationLoop(animate);
