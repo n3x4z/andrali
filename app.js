@@ -45,9 +45,9 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 function animate() {
     requestAnimationFrame( animate );
 
-    cube.rotation.x += orientation_x;
-    cube.rotation.y += orientation_y;
-    cube.rotation.z += orientation_z;
+    cube.rotation.x = orientation_x;
+    cube.rotation.y = orientation_y;
+    cube.rotation.z = orientation_z;
 
     renderer.render(scene, camera);
 }
