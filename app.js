@@ -4,6 +4,10 @@ import * as THREE from './three.module.js';
 const output = document.getElementById('output');
 let orientation_x,orientation_y,orientation_z
 
+function r2de(radians) {
+    return radians * (180 / Math.PI);
+}
+
 window.addEventListener('deviceorientation', (event) => {
     const alpha = event.alpha ? (event.alpha * Math.PI) / 180 : 0;
     const beta = event.beta ? (event.beta * Math.PI) / 180 : 0;
@@ -16,9 +20,9 @@ worker.onmessage = (event) => {
     const { quaternion } = event.data;
     output.textContent = `HMD Orientation: X=${quaternion[1].toFixed(2)}, Y=${quaternion[2].toFixed(2)}, Z=${quaternion[3].toFixed(2)}`;
 
-    orientation_x = quaternion[1]
-    orientation_y = quaternion[2]
-    orientation_z = quaternion[3]
+    orientation_x = r2de(quaternion[1])
+    orientation_y = r2de(quaternion[2])
+    orientation_z = r2de(quaternion[3])
 };
 
 const scene = new THREE.Scene();
