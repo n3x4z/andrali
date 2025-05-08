@@ -1,0 +1,17 @@
+body {
+    margin: 0;
+}
+
+#xrdisp {
+    z-index: 1;
+    position: fixed;
+    top: 0;
+    left: 0;
+    outline: 0;
+}
+
+#output {
+    color: white;
+    z-index: 2;
+    position: fixed;
+}
