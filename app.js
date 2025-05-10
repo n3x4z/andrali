@@ -109,7 +109,7 @@ function handleDeviceOrientation(event) {
 
     let alpha = THREE.MathUtils.degToRad(event.alpha);
     let gamma = THREE.MathUtils.degToRad(event.beta);
-    let betta = THREE.MathUtils.degToRad(event.gamma);
+    let beta = THREE.MathUtils.degToRad(event.gamma);
 
     const euler = new THREE.Euler(beta, gamma, alpha, 'YXZ');
     const quaternion = new THREE.Quaternion();
