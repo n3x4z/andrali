@@ -108,14 +108,8 @@ function handleDeviceOrientation(event) {
     if (event.alpha === null || event.beta === null || event.gamma === null) return;
 
     let alpha = THREE.MathUtils.degToRad(event.alpha);
-    let beta = THREE.MathUtils.degToRad(event.beta);
-    let gamma = THREE.MathUtils.degToRad(event.gamma);
-
-    // Adjust for landscape orientation
-    if (window.innerWidth > window.innerHeight) {
-        // Swap beta and gamma
-        [alpha, beta] = [beta, alpha];
-    }
+    let gamma = THREE.MathUtils.degToRad(event.beta);
+    let betta = THREE.MathUtils.degToRad(event.gamma);
 
     const euler = new THREE.Euler(beta, gamma, alpha, 'YXZ');
     const quaternion = new THREE.Quaternion();
