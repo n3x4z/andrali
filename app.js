@@ -107,11 +107,11 @@ distortionScene.add(rightDistortionMesh);
 function handleDeviceOrientation(event) {
     if (event.alpha === null || event.beta === null || event.gamma === null) return;
 
-    let alpha = THREE.MathUtils.degToRad(event.alpha);
-    let gamma = THREE.MathUtils.degToRad(event.beta);
-    let beta = THREE.MathUtils.degToRad(event.gamma);
+    const alpha = THREE.MathUtils.degToRad(event.alpha);
+    const beta = THREE.MathUtils.degToRad(event.beta);
+    const gamma = THREE.MathUtils.degToRad(event.gamma);
 
-    const euler = new THREE.Euler(beta, gamma, alpha, 'YXZ');
+    const euler = new THREE.Euler(beta, gamma, alpha, 'XYZ');
     const quaternion = new THREE.Quaternion();
     quaternion.setFromEuler(euler);
 
