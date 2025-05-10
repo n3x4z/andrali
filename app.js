@@ -107,24 +107,21 @@ distortionScene.add(rightDistortionMesh);
 function handleDeviceOrientation(event) {
     if (event.alpha === null || event.beta === null || event.gamma === null) return;
 
-    const alpha = THREE.MathUtils.degToRad(event.alpha);
-    const beta = THREE.MathUtils.degToRad(event.beta);
-    const gamma = THREE.MathUtils.degToRad(event.gamma);
+    let alpha = THREE.MathUtils.degToRad(event.alpha);
+    let beta = THREE.MathUtils.degToRad(event.beta);
+    let gamma = THREE.MathUtils.degToRad(event.gamma);
 
-    // Adjust Euler order and axes for Firefox
-    const euler = new THREE.Euler(
-        beta,          // X-axis (tilt)
-        -gamma,        // Invert Y-axis (rotation)
-        alpha,         // Z-axis (yaw)
-        'YXZ'          // Order: Y (gamma), X (beta), Z (alpha)
-    );
+    // Adjust for landscape orientation
+    if (window.innerWidth > window.innerHeight) {
+        // Swap beta and gamma
+        [beta, gamma] = [gamma, beta];
+        // Invert gamma to correct direction
+        gamma = -gamma;
+    }
 
+    const euler = new THREE.Euler(beta, gamma, alpha, 'YXZ');
     const quaternion = new THREE.Quaternion();
     quaternion.setFromEuler(euler);
-
-    // Optional: Apply additional rotation to realign axes
-    const adjust = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
-    quaternion.multiply(adjust);
 
     worker.postMessage({ quaternion: quaternion.toArray() });
 }
