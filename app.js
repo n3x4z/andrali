@@ -114,9 +114,7 @@ function handleDeviceOrientation(event) {
     // Adjust for landscape orientation
     if (window.innerWidth > window.innerHeight) {
         // Swap beta and gamma
-        [beta, gamma] = [gamma, beta];
-        // Invert gamma to correct direction
-        gamma = -gamma;
+        [alpha, beta] = [beta, alpha];
     }
 
     const euler = new THREE.Euler(beta, gamma, alpha, 'YXZ');
