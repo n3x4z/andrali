@@ -40,6 +40,7 @@ const renderer = new THREE.WebGLRenderer({
     powerPreference: 'high-performance'
 });
 renderer.autoClear = false; // Important for rendering multiple views
+renderer.setClearColor(0x444440);
 
 function setStereoCameraTransforms(camera, quaternion, eyeOffset) {
     camera.quaternion.fromArray(quaternion);
@@ -47,6 +48,64 @@ function setStereoCameraTransforms(camera, quaternion, eyeOffset) {
     position.applyQuaternion(camera.quaternion);
     camera.position.add(position);
 }
+
+// 1. Render Target Setup
+const leftRenderTarget = new THREE.WebGLRenderTarget(window.innerWidth / 2, window.innerHeight, {
+    minFilter: THREE.LinearFilter,
+    magFilter: THREE.LinearFilter,
+    format: THREE.RGBAFormat,
+    depthBuffer: true,
+    stencilBuffer: false
+});
+const rightRenderTarget = new THREE.WebGLRenderTarget(window.innerWidth / 2, window.innerHeight, {
+    minFilter: THREE.LinearFilter,
+    magFilter: THREE.LinearFilter,
+    format: THREE.RGBAFormat,
+    depthBuffer: true,
+    stencilBuffer: false
+});
+
+// 2. Distortion Shader
+const distortionShader = {
+    uniforms: {
+        tDiffuse: { value: null }, // The render target texture
+        resolution: { value: new THREE.Vector2(window.innerWidth / 2, window.innerHeight) },
+        distortionK1: { value: 0.1 }, // Adjust this value for distortion
+        distortionK2: { value: 0.0 }, // Adjust this value for distortion
+    },
+    vertexShader: `
+        varying vec2 vUv;
+        void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+        }
+    `,
+    fragmentShader: `
+        uniform sampler2D tDiffuse;
+        uniform vec2 resolution;
+        uniform float distortionK1;
+        uniform float distortionK2;
+        varying vec2 vUv;
+        void main() {
+            vec2 uv = (vUv - 0.5) * 2.0; // Remap UV to [-1, 1]
+            float r = length(uv);
+            float distortion = 1.0 + distortionK1 * pow(r, 2.0) + distortionK2 * pow(r, 4.0);
+            vec2 distortedUV = uv * distortion;
+            distortedUV = (distortedUV / 2.0) + 0.5; // Remap to [0, 1]
+            gl_FragColor = texture2D(tDiffuse, distortedUV);
+        }
+    `
+};
+
+const leftDistortionMaterial = new THREE.ShaderMaterial(distortionShader);
+const rightDistortionMaterial = new THREE.ShaderMaterial(distortionShader);
+const distortionQuad = new THREE.PlaneGeometry(2, 2); // Covers the viewport
+const leftDistortionMesh = new THREE.Mesh(distortionQuad, leftDistortionMaterial);
+const rightDistortionMesh = new THREE.Mesh(distortionQuad, rightDistortionMaterial);
+const distortionScene = new THREE.Scene();
+distortionScene.add(leftDistortionMesh);
+distortionScene.add(rightDistortionMesh);
+
 
 // Handle RelativeOrientationSensor
 if (window.RelativeOrientationSensor) {
@@ -132,26 +191,46 @@ worker.onmessage = (event) => {
 function animate() {
     requestAnimationFrame(animate);
 
-    renderer.clear(); // Clear the canvas before rendering each eye
+    renderer.clear(); // Clear the canvas
 
     const width = window.innerWidth;
     const height = window.innerHeight;
 
     if (isLandscape) {
-        // Left eye view
+        // Render to Texture
         renderer.setViewport(0, 0, width / 2, height);
-        renderer.render(scene, leftCamera);
+        renderer.render(scene, leftCamera, leftRenderTarget);
 
-        // Right eye view
         renderer.setViewport(width / 2, 0, width / 2, height);
-        renderer.render(scene, rightCamera);
+        renderer.render(scene, rightCamera, rightRenderTarget);
+
+        // Apply Distortion and Render to Screen
+        leftDistortionMaterial.uniforms.tDiffuse.value = leftRenderTarget.texture;
+        leftDistortionMaterial.uniforms.resolution.value.set(width / 2, height);
+        renderer.setViewport(0, 0, width / 2, height);
+        renderer.render(distortionScene, leftCamera); // Use leftCamera (ortho is fine)
+
+        rightDistortionMaterial.uniforms.tDiffuse.value = rightRenderTarget.texture;
+        rightDistortionMaterial.uniforms.resolution.value.set(width / 2, height);
+        renderer.setViewport(width / 2, 0, width / 2, height);
+        renderer.render(distortionScene, leftCamera); // Use leftCamera (ortho is fine)
     } else {
-        // In portrait, stack the views (optional, or just render one)
+        // Portrait mode: Stack views vertically
         renderer.setViewport(0, 0, width, height / 2);
-        renderer.render(scene, leftCamera);
+        renderer.render(scene, leftCamera, leftRenderTarget);
 
         renderer.setViewport(0, height / 2, width, height / 2);
-        renderer.render(scene, rightCamera);
+        renderer.render(scene, rightCamera, rightRenderTarget);
+
+        leftDistortionMaterial.uniforms.tDiffuse.value = leftRenderTarget.texture;
+        leftDistortionMaterial.uniforms.resolution.value.set(width, height / 2);
+        renderer.setViewport(0, 0, width, height / 2);
+        renderer.render(distortionScene, leftCamera);
+
+        rightDistortionMaterial.uniforms.tDiffuse.value = rightRenderTarget.texture;
+        rightDistortionMaterial.uniforms.resolution.value.set(width, height / 2);
+        renderer.setViewport(0, height / 2, width, height / 2);
+        renderer.render(distortionScene, leftCamera);
     }
 }
 
@@ -165,6 +244,8 @@ function onWindowResize() {
     rightCamera.updateProjectionMatrix();
     renderer.setPixelRatio(window.devicePixelRatio);
     isLandscape = width > height;
+    leftRenderTarget.setSize(width / 2, height); // Also update render target sizes on resize
+    rightRenderTarget.setSize(width / 2, height);
 }
 window.addEventListener('resize', onWindowResize, false);
 
