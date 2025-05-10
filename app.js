@@ -111,9 +111,20 @@ function handleDeviceOrientation(event) {
     const beta = THREE.MathUtils.degToRad(event.beta);
     const gamma = THREE.MathUtils.degToRad(event.gamma);
 
-    const euler = new THREE.Euler(beta, gamma, alpha, 'YXZ');
+    // Adjust Euler order and axes for Firefox
+    const euler = new THREE.Euler(
+        beta,          // X-axis (tilt)
+        -gamma,        // Invert Y-axis (rotation)
+        alpha,         // Z-axis (yaw)
+        'YXZ'          // Order: Y (gamma), X (beta), Z (alpha)
+    );
+
     const quaternion = new THREE.Quaternion();
     quaternion.setFromEuler(euler);
+
+    // Optional: Apply additional rotation to realign axes
+    const adjust = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+    quaternion.multiply(adjust);
 
     worker.postMessage({ quaternion: quaternion.toArray() });
 }
