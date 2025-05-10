@@ -37,7 +37,6 @@ rightCamera.position.y = -3;
 const renderer = new THREE.WebGLRenderer({
     antialias: false,
     canvas: xrCanvas,
-    context: ctx,
     powerPreference: 'high-performance'
 });
 renderer.autoClear = false;
