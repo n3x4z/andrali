@@ -158,6 +158,8 @@ createModule().then((Module) => {
   self.postMessage({ error: "Wasm module initialization failed: " + error.message });
 });
 
+let lastProcessedQuaternion = null; // Declare in the global scope
+
 self.onmessage = (event) => {
   if (!moduleReady) {
     console.warn("Worker received message before Wasm module was ready. Message ignored.", event.data);
@@ -169,6 +171,7 @@ self.onmessage = (event) => {
   // Handle reset command if sent
   if (reset) {
     filter.reset();
+    lastProcessedQuaternion = null; // Reset this as well
     return;
   }
 
@@ -177,49 +180,49 @@ self.onmessage = (event) => {
       // Check if browser is chromium or if we need to apply our filter
       // We'll infer this from whether timestamp data is provided
       const timestamp = event.data.timestamp || performance.now();
-      
+
       // Process the quaternion based on source
-    let processedQuaternion;
-    
-    if (event.data.needsFiltering) {
-      // This is from our custom orientation tracking and needs filtering
-      
-      // First, ensure quaternion isn't flipping
-      // This prevents the 180° flip issue when looking up
-      if (!this.lastProcessedQuaternion) {
-        this.lastProcessedQuaternion = [...inputQuaternion];
-      } else {
-        // Check if the quaternion suddenly flipped sign (indicates a 180° rotation issue)
-        const dot = 
-          inputQuaternion[0] * this.lastProcessedQuaternion[0] +
-          inputQuaternion[1] * this.lastProcessedQuaternion[1] +
-          inputQuaternion[2] * this.lastProcessedQuaternion[2] +
-          inputQuaternion[3] * this.lastProcessedQuaternion[3];
-        
-        // If the dot product is negative, the quaternions represent opposite rotations
-        // In this case, negate the input quaternion to ensure smooth transitions
-        if (dot < 0) {
-          inputQuaternion = inputQuaternion.map(x => -x);
+      let processedQuaternion;
+
+      if (event.data.needsFiltering) {
+        // This is from our custom orientation tracking and needs filtering
+
+        // First, ensure quaternion isn't flipping
+        // This prevents the 180° flip issue when looking up
+        if (!lastProcessedQuaternion) {
+          lastProcessedQuaternion = [...inputQuaternion];
+        } else {
+          // Check if the quaternion suddenly flipped sign (indicates a 180° rotation issue)
+          const dot =
+            inputQuaternion[0] * lastProcessedQuaternion[0] +
+            inputQuaternion[1] * lastProcessedQuaternion[1] +
+            inputQuaternion[2] * lastProcessedQuaternion[2] +
+            inputQuaternion[3] * lastProcessedQuaternion[3];
+
+          // If the dot product is negative, the quaternions represent opposite rotations
+          // In this case, negate the input quaternion to ensure smooth transitions
+          if (dot < 0) {
+            inputQuaternion = inputQuaternion.map(x => -x);
+          }
+
+          lastProcessedQuaternion = [...inputQuaternion];
         }
-        
-        this.lastProcessedQuaternion = [...inputQuaternion];
+
+        // Apply advanced filtering for smooth motion
+        processedQuaternion = filter.update(inputQuaternion, timestamp);
+      } else {
+        // This is from RelativeOrientationSensor which already provides good data
+        processedQuaternion = inputQuaternion;
       }
-      
-      // Apply advanced filtering for smooth motion
-      processedQuaternion = filter.update(inputQuaternion, timestamp);
-    } else {
-      // This is from RelativeOrientationSensor which already provides good data
-      processedQuaternion = inputQuaternion;
-    }
-      
+
       // Pass the quaternion components to the C++ function
       calculator.updateQuaternion(
         processedQuaternion[0],
-        processedQuaternion[1], 
-        processedQuaternion[2], 
+        processedQuaternion[1],
+        processedQuaternion[2],
         processedQuaternion[3]
       );
-      
+
       // Get the quaternion back from C++
       const resultFromCpp = calculator.getQuaternion();
       let quaternionToPost;
