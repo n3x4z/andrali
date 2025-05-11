@@ -4,11 +4,12 @@ let calculator;
 let moduleReady = false;
 let lastTimestamp = 0;
 let complementaryFilterCoeff = 0.98; // Adjustable filter coefficient (0.98 works well for most devices)
+let lastProcessedQuaternion = null; // Declare in the global scope
 
 // Advanced complementary filter for non-Chromium browsers
 // This provides smooth, stable quaternion values with proper interpolation
 class ComplementaryFilter {
-  letructor() {
+  constructor() { // Corrected constructor name
     // Initialize with identity quaternion
     this.filteredQuaternion = [0, 0, 0, 1];
     this.lastUpdateTime = 0;
@@ -157,8 +158,6 @@ createModule().then((Module) => {
   console.error("Error initializing Wasm module in worker:", error);
   self.postMessage({ error: "Wasm module initialization failed: " + error.message });
 });
-
-let lastProcessedQuaternion = null; // Declare in the global scope
 
 self.onmessage = (event) => {
   if (!moduleReady) {
