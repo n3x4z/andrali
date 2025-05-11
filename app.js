@@ -1,4 +1,7 @@
 import * as THREE from './three.module.js';
+import { RGBELoader } from './jsm/loaders/RGBELoader.js';
+import { TextGeometry } from './jsm/geometries/TextGeometry.js';
+import { FontLoader } from './jsm/loaders/FontLoader.js';
 
 const worker = new Worker('./hmd_orientation.js', { type: 'module' });
 
@@ -10,6 +13,9 @@ let display_euler_x = 0;
 let display_euler_y = 0;
 let display_euler_z = 0;
 
+const loader = new RGBELoader();
+const hdriPath = 'sky.hdr';
+
 const eyeSeparation = 0;
 let isLandscape = window.innerWidth > window.innerHeight;
 
@@ -17,19 +23,107 @@ function r2de(radians) {
     return radians * (180 / Math.PI);
 }
 
+let wakeLock = null;
+
+async function requestWakeLock() {
+    try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        console.log('Wake Lock is active!');
+
+        wakeLock.addEventListener('release', () => {
+            console.log('Wake Lock was released!');
+            wakeLock = null;
+        });
+    } catch (err) {
+        console.error(`${err.name}, ${err.message}`);
+    }
+}
+
+async function releaseWakeLock() {
+    if (wakeLock !== null) {
+        await wakeLock.release();
+        wakeLock = null;
+        console.log('Wake Lock released manually.');
+    }
+}
+
+// Call requestWakeLock() when your Three.js app starts or becomes the focus
+requestWakeLock();
+
+// You might want to release the wake lock when the user navigates away
+// or when your app is no longer the primary focus.
+// For example, you could listen for the 'visibilitychange' event:
+document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'hidden' && wakeLock !== null) {
+        await releaseWakeLock();
+    } else if (document.visibilityState === 'visible' && wakeLock === null) {
+        await requestWakeLock();
+    }
+});
+
+function setRotationFromDegrees(mesh, degreesX, degreesY, degreesZ) {
+    // Convert degrees to radians
+    const radiansX = THREE.MathUtils.degToRad(degreesX);
+    const radiansY = THREE.MathUtils.degToRad(degreesY);
+    const radiansZ = THREE.MathUtils.degToRad(degreesZ);
+
+    // Set the rotation using Euler angles
+    mesh.rotation.set(radiansX, radiansY, radiansZ);
+}
+
 const scene = new THREE.Scene();
-const leftCamera = new THREE.PerspectiveCamera(90, 0.5 * window.innerWidth / window.innerHeight, 0.1, 1000);
-const rightCamera = new THREE.PerspectiveCamera(90, 0.5 * window.innerWidth / window.innerHeight, 0.1, 1000);
+const leftCamera = new THREE.PerspectiveCamera(100, 0.5 * window.innerWidth / window.innerHeight, 0.1, 1000);
+const rightCamera = new THREE.PerspectiveCamera(100, 0.5 * window.innerWidth / window.innerHeight, 0.1, 1000);
 scene.add(leftCamera);
 scene.add(rightCamera);
 
-const axesHelper = new THREE.AxesHelper(2);
-scene.add(axesHelper);
+const plge = new THREE.PlaneGeometry(6, 4);
+const plma = new THREE.MeshBasicMaterial({ color: 0x000000 });
+const guip = new THREE.Mesh(plge, plma);
+setRotationFromDegrees(guip, 90, 0, 0)
+scene.add(guip);
 
-const geometry = new THREE.BoxGeometry(1, 1, 1);
-const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-const cube = new THREE.Mesh(geometry, material);
-scene.add(cube);
+const loader2f = new FontLoader();
+
+loader2f.load('font.json', function (font) {
+    const geometry = new TextGeometry('Welcome to Andrali! :)', {
+        font: font,
+        size: 0.3,
+        depth: 0.01,
+        curveSegments: 12,
+        bevelEnabled: false,
+    });
+
+    const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const textMesh = new THREE.Mesh(geometry, material);
+
+    setRotationFromDegrees(textMesh, 90, 0, 0)
+    //textMesh.position.set(guip.position.x - 3.3, guip.position.y, guip.position.z + 2);
+    textMesh.position.set(guip.position.x - 2, guip.position.y - 0.01, guip.position.z + 0.75);
+    scene.add(textMesh);
+
+    const okbge = new THREE.PlaneGeometry(1.5, 0.75);
+    const okbma = new THREE.MeshBasicMaterial({ color: 0x00dd00 });
+    const okbmesh = new THREE.Mesh(okbge, okbma);
+    setRotationFromDegrees(okbmesh, 90, 0, 0)
+    scene.add(okbmesh);
+    okbmesh.position.set(guip.position.x - 2, guip.position.y - 0.01, guip.position.z - 1.5);
+
+    const test = new TextGeometry('Continue', {
+        font: font,
+        size: 0.225,
+        depth: 0.01,
+        curveSegments: 12,
+        bevelEnabled: false,
+    });
+
+    const textMeshTest = new THREE.Mesh(test, material);
+
+    setRotationFromDegrees(textMeshTest, 90, 0, 0)
+    //textMeshTest.position.set(guip.position.x - 3.3, guip.position.y, guip.position.z + 2);
+    textMeshTest.position.set(okbmesh.position.x - 0.575, okbmesh.position.y - 0.01, okbmesh.position.z - 0.1);
+    scene.add(textMeshTest);
+});
 
 leftCamera.position.y = -3;
 rightCamera.position.y = -3;
@@ -37,10 +131,30 @@ rightCamera.position.y = -3;
 const renderer = new THREE.WebGLRenderer({
     antialias: false,
     canvas: xrCanvas,
-    powerPreference: 'high-performance'
+    powerPreference: 'high-performance',
 });
 renderer.autoClear = false;
-renderer.setClearColor(0x444440);
+
+loader.load(hdriPath, function (texture) {
+    texture.mapping = THREE.EquirectangularReflectionMapping;
+    scene.environment = texture;
+
+    const sphereGeometry = new THREE.SphereGeometry(500, 60, 40);
+    const sphereMaterial = new THREE.MeshBasicMaterial({
+        map: texture,
+        side: THREE.BackSide
+    });
+    const skySphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+    skySphere.rotation.x = Math.PI / 2;
+    scene.add(skySphere);
+
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.5;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+}, undefined, function (error) {
+    console.error('An error occurred while loading the HDRI:', error);
+});
 
 function setStereoCameraTransforms(camera, quaternion, eyeOffset) {
     camera.quaternion.fromArray(quaternion);
@@ -64,79 +178,76 @@ const rightRenderTarget = new THREE.WebGLRenderTarget(window.innerWidth / 2, win
     stencilBuffer: false
 });
 
-const distortionShader = {
-    uniforms: {
-        tDiffuse: { value: null },
-        resolution: { value: new THREE.Vector2(window.innerWidth / 2, window.innerHeight) },
-        distortionK1: { value: 0.1 },
-        distortionK2: { value: 0.0 },
-    },
-    vertexShader: `
-        varying vec2 vUv;
-        void main() {
-            vUv = uv;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+function handleDeviceOrientation(event) {
+    if (event.alpha === null || event.beta === null || event.gamma === null) return;
+
+    const alpha = THREE.MathUtils.degToRad(event.alpha);
+    const beta = THREE.MathUtils.degToRad(event.beta);
+    const gamma = THREE.MathUtils.degToRad(event.gamma);
+
+    const euler = new THREE.Euler(beta, gamma, alpha, 'XYZ');
+    const quaternion = new THREE.Quaternion();
+    quaternion.setFromEuler(euler);
+
+    worker.postMessage({ quaternion: quaternion.toArray() });
+}
+
+function initializeDeviceOrientation() {
+    if (typeof DeviceOrientationEvent !== 'undefined') {
+        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+            output.innerHTML = "Click the screen to enable DeviceOrientation.";
+            xrCanvas.addEventListener('click', requestDeviceOrientationPermission);
+        } else {
+            startDeviceOrientation();
         }
-    `,
-    fragmentShader: `
-        uniform sampler2D tDiffuse;
-        uniform vec2 resolution;
-        uniform float distortionK1;
-        uniform float distortionK2;
-        varying vec2 vUv;
-        void main() {
-            vec2 uv = (vUv - 0.5) * 2.0;
-            float r = length(uv);
-            float distortion = 1.0 + distortionK1 * pow(r, 2.0) + distortionK2 * pow(r, 4.0);
-            vec2 distortedUV = uv * distortion;
-            distortedUV = (distortedUV / 2.0) + 0.5;
-            gl_FragColor = texture2D(tDiffuse, distortedUV);
-        }
-    `
-};
-
-const leftDistortionMaterial = new THREE.ShaderMaterial(distortionShader);
-const rightDistortionMaterial = new THREE.ShaderMaterial(distortionShader);
-const distortionQuad = new THREE.PlaneGeometry(2, 2);
-const leftDistortionMesh = new THREE.Mesh(distortionQuad, leftDistortionMaterial);
-const rightDistortionMesh = new THREE.Mesh(distortionQuad, rightDistortionMaterial);
-const distortionScene = new THREE.Scene();
-distortionScene.add(leftDistortionMesh);
-distortionScene.add(rightDistortionMesh);
-
-// Tracking initial orientation for relative motion calculation
-let initialQuaternion = new THREE.Quaternion();
-let hasInitialOrientation = false;
-let relativeQuaternion = new THREE.Quaternion();
-
-// Detect browser type
-const isChromium = !!window.chrome;
-output.innerHTML = isChromium ? "Chromium-based browser detected" : "Non-Chromium browser detected";
-
-function initializeOrientationSystem() {
-    if (window.RelativeOrientationSensor) {
-        // For Chromium browsers with RelativeOrientationSensor
-        Promise.all([
-            navigator.permissions.query({ name: 'accelerometer' }),
-            navigator.permissions.query({ name: 'gyroscope' })
-        ]).then(results => {
-            if (results.every(result => result.state === 'granted' || result.state === 'prompt')) {
-                initializeRelativeSensor();
-            } else {
-                output.innerHTML = "Permissions not granted. Falling back to custom orientation tracking.";
-                initializeCustomOrientation();
-            }
-        }).catch(error => {
-            output.innerHTML = "Permission query failed. Falling back to custom orientation tracking.";
-            initializeCustomOrientation();
-        });
     } else {
-        // For non-Chromium browsers without RelativeOrientationSensor
-        initializeCustomOrientation();
+        output.innerHTML = "DeviceOrientation API not supported.";
+        console.error("DeviceOrientation API not supported.");
     }
 }
 
-function initializeRelativeSensor() {
+function requestDeviceOrientationPermission() {
+    DeviceOrientationEvent.requestPermission()
+        .then(permissionState => {
+            if (permissionState === 'granted') {
+                startDeviceOrientation();
+                output.innerHTML = "DeviceOrientation started. Move your device.";
+            } else {
+                output.innerHTML = "Permission for DeviceOrientation denied.";
+            }
+        })
+        .catch(error => {
+            output.innerHTML = "Error requesting DeviceOrientation permission: " + error;
+            console.error(error);
+        });
+    xrCanvas.removeEventListener('click', requestDeviceOrientationPermission);
+}
+
+function startDeviceOrientation() {
+    window.addEventListener('deviceorientation', handleDeviceOrientation);
+    output.innerHTML = "DeviceOrientation started. Move your device.";
+}
+
+if (window.RelativeOrientationSensor) {
+    Promise.all([
+        navigator.permissions.query({ name: 'accelerometer' }),
+        navigator.permissions.query({ name: 'gyroscope' })
+    ]).then(results => {
+        if (results.every(result => result.state === 'granted' || result.state === 'prompt')) {
+            initializeSensor();
+        } else {
+            output.innerHTML = "Permissions not granted. Falling back to DeviceOrientation.";
+            initializeDeviceOrientation();
+        }
+    }).catch(error => {
+        output.innerHTML = "Permission query failed. Falling back to DeviceOrientation.";
+        initializeDeviceOrientation();
+    });
+} else {
+    initializeDeviceOrientation();
+}
+
+function initializeSensor() {
     try {
         const options = { frequency: 120, referenceFrame: 'device' };
         const sensor = new RelativeOrientationSensor(options);
@@ -148,187 +259,19 @@ function initializeRelativeSensor() {
         });
 
         sensor.addEventListener('error', (event) => {
-            output.innerHTML = `Sensor Error: ${event.error.name} - ${event.error.message}. Falling back to custom orientation.`;
+            output.innerHTML = `Sensor Error: ${event.error.name} - ${event.error.message}. Falling back to DeviceOrientation.`;
             console.error('Sensor Error:', event.error);
-            initializeCustomOrientation();
+            initializeDeviceOrientation();
         });
 
         sensor.start();
         output.innerHTML = "RelativeOrientationSensor started. Move your device.";
 
     } catch (error) {
-        output.innerHTML = `Error initializing sensor: ${error.name} - ${error.message}. Falling back to custom orientation.`;
+        output.innerHTML = `Error initializing sensor: ${error.name} - ${event.error.message}. Falling back to DeviceOrientation.`;
         console.error('Error initializing sensor:', error);
-        initializeCustomOrientation();
+        initializeDeviceOrientation();
     }
-}
-
-function initializeCustomOrientation() {
-    if (typeof DeviceOrientationEvent !== 'undefined') {
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            output.innerHTML = "Click the screen to enable CustomOrientation.";
-            xrCanvas.addEventListener('click', requestCustomOrientationPermission);
-        } else {
-            startCustomOrientation();
-        }
-    } else {
-        output.innerHTML = "Motion sensors not supported on this device.";
-        console.error("Motion sensors not supported.");
-    }
-}
-
-function requestCustomOrientationPermission() {
-    DeviceOrientationEvent.requestPermission()
-        .then(permissionState => {
-            if (permissionState === 'granted') {
-                startCustomOrientation();
-                output.innerHTML = "Custom orientation tracking started. Move your device.";
-            } else {
-                output.innerHTML = "Permission for orientation access denied.";
-            }
-        })
-        .catch(error => {
-            output.innerHTML = "Error requesting orientation permission: " + error;
-            console.error(error);
-        });
-    xrCanvas.removeEventListener('click', requestCustomOrientationPermission);
-}
-
-function startCustomOrientation() {
-    // Reset initial values
-    hasInitialOrientation = false;
-    
-    // Use a gyroscope-enhanced approach
-    if (window.DeviceOrientationEvent) {
-        window.addEventListener('deviceorientation', handleCustomDeviceOrientation);
-        output.innerHTML = "Custom orientation tracking active. Using enhanced relative motion. Move your device.";
-    } else {
-        output.innerHTML = "No orientation sensors available on this device.";
-    }
-}
-
-function handleCustomDeviceOrientation(event) {
-    if (event.alpha === null || event.beta === null || event.gamma === null) return;
-
-    // First, convert device orientation to consistent space
-    let alpha = THREE.MathUtils.degToRad(event.alpha || 0); // Z-axis rotation (yaw)
-    let beta = THREE.MathUtils.degToRad(event.beta || 0);   // X-axis rotation (pitch)
-    let gamma = THREE.MathUtils.degToRad(event.gamma || 0); // Y-axis rotation (roll)
-    
-    // Clamp beta to avoid gimbal lock issues near poles
-    beta = Math.max(-Math.PI/2 + 0.001, Math.min(Math.PI/2 - 0.001, beta));
-    
-    // Create a quaternion using a specific rotation order 
-    // YXZ works better for head tracking - first apply yaw, then pitch, then roll
-    const rotation = new THREE.Euler(0, 0, 0, 'YXZ');
-    
-    // Apply rotations in the right order:
-    // Convert from device space to our app's expected space
-    rotation.set(beta, alpha, -gamma, 'YXZ');
-    
-    const deviceQuaternion = new THREE.Quaternion();
-    deviceQuaternion.setFromEuler(rotation);
-    
-    // Create a correction quaternion to align the coordinate systems
-    const correctionQuat = new THREE.Quaternion().setFromEuler(
-        new THREE.Euler(Math.PI/2, 0, 0, 'XYZ')
-    );
-    
-    // Apply the coordinate system correction
-    deviceQuaternion.multiply(correctionQuat);
-    
-    // Normalize to prevent drift
-    deviceQuaternion.normalize();
-    
-    // Capture initial orientation for relative calculations
-    if (!hasInitialOrientation) {
-        initialQuaternion.copy(deviceQuaternion);
-        initialQuaternion.invert(); // To use as a "reset" reference point
-        hasInitialOrientation = true;
-        output.innerHTML = "Initial orientation captured. Move device to look around.";
-    }
-    
-    // Calculate relative orientation correctly
-    relativeQuaternion.copy(deviceQuaternion);
-    relativeQuaternion.premultiply(initialQuaternion);
-    
-    // Apply screen orientation adjustment if needed
-    adjustForScreenOrientation(relativeQuaternion);
-    
-    // Send the relative quaternion to the worker with a flag to indicate it needs filtering
-    worker.postMessage({ 
-        quaternion: [
-            relativeQuaternion.x,
-            relativeQuaternion.y,
-            relativeQuaternion.z,
-            relativeQuaternion.w
-        ],
-        needsFiltering: true,
-        timestamp: performance.now()
-    });
-}
-
-function adjustForScreenOrientation(quaternion) {
-    // Get current screen orientation in degrees
-    let screenOrientation = 0;
-    
-    if (window.screen && window.screen.orientation) {
-        // Modern API - more reliable
-        screenOrientation = window.screen.orientation.angle;
-    } else {
-        // Legacy API - fallback
-        screenOrientation = window.orientation || 0;
-    }
-    
-    // Create a rotation quaternion for screen orientation
-    const screenRotation = new THREE.Quaternion();
-    
-    // Adjust based on screen orientation
-    // We use a specific axis for rotation to maintain proper coordinate system
-    screenRotation.setFromAxisAngle(
-        new THREE.Vector3(0, 0, 1), 
-        THREE.MathUtils.degToRad(-screenOrientation)
-    );
-    
-    // Apply the screen rotation correction
-    // Note: order matters for quaternion multiplication!
-    quaternion.multiply(screenRotation);
-    
-    // Normalize the quaternion to prevent accumulation errors
-    quaternion.normalize();
-}
-
-// Function to reset the reference frame on demand
-function resetOrientation() {
-    hasInitialOrientation = false; // This will cause the next event to set a new initial orientation
-    
-    // Tell the worker to reset its filters
-    worker.postMessage({ reset: true });
-    
-    // Reset quaternions
-    initialQuaternion = new THREE.Quaternion();
-    relativeQuaternion = new THREE.Quaternion();
-    
-    output.innerHTML = "Orientation reference reset. Look forward and hold still.";
-    
-    // Freeze for a moment to allow stabilization
-    setTimeout(() => {
-        output.innerHTML = "Calibrating...";
-    }, 100);
-}
-
-// Add a reset button to the UI (helpful for user experience)
-function addResetButton() {
-    const resetBtn = document.createElement('button');
-    resetBtn.textContent = 'Reset View';
-    resetBtn.style.position = 'absolute';
-    resetBtn.style.bottom = '20px';
-    resetBtn.style.left = '50%';
-    resetBtn.style.transform = 'translateX(-50%)';
-    resetBtn.style.padding = '10px 20px';
-    resetBtn.style.zIndex = '100';
-    resetBtn.addEventListener('click', resetOrientation);
-    document.body.appendChild(resetBtn);
 }
 
 worker.onmessage = (event) => {
@@ -346,9 +289,6 @@ worker.onmessage = (event) => {
         display_euler_x = euler.x;
         display_euler_y = euler.y;
         display_euler_z = euler.z;
-
-        output.innerHTML = `Quaternion: ${receivedQuaternion.map(n => n.toFixed(2)).join(', ')}<br>`;
-        output.innerHTML += `Euler X: ${r2de(display_euler_x).toFixed(2)}, Y: ${r2de(display_euler_y).toFixed(2)}, Z: ${r2de(display_euler_z).toFixed(2)}`;
     }
 };
 
@@ -365,32 +305,6 @@ function animate() {
 
         renderer.setViewport(width / 2, 0, width / 2, height);
         renderer.render(scene, rightCamera, rightRenderTarget);
-
-        leftDistortionMaterial.uniforms.tDiffuse.value = leftRenderTarget.texture;
-        leftDistortionMaterial.uniforms.resolution.value.set(width / 2, height);
-        renderer.setViewport(0, 0, width / 2, height);
-        renderer.render(distortionScene, leftCamera);
-
-        rightDistortionMaterial.uniforms.tDiffuse.value = rightRenderTarget.texture;
-        rightDistortionMaterial.uniforms.resolution.value.set(width / 2, height);
-        renderer.setViewport(width / 2, 0, width / 2, height);
-        renderer.render(distortionScene, leftCamera);
-    } else {
-        renderer.setViewport(0, 0, width, height / 2);
-        renderer.render(scene, leftCamera, leftRenderTarget);
-
-        renderer.setViewport(0, height / 2, width, height / 2);
-        renderer.render(scene, rightCamera, rightRenderTarget);
-
-        leftDistortionMaterial.uniforms.tDiffuse.value = leftRenderTarget.texture;
-        leftDistortionMaterial.uniforms.resolution.value.set(width, height / 2);
-        renderer.setViewport(0, 0, width, height / 2);
-        renderer.render(distortionScene, leftCamera);
-
-        rightDistortionMaterial.uniforms.tDiffuse.value = rightRenderTarget.texture;
-        rightDistortionMaterial.uniforms.resolution.value.set(width, height / 2);
-        renderer.setViewport(0, height / 2, width, height / 2);
-        renderer.render(distortionScene, leftCamera);
     }
 }
 
@@ -409,20 +323,6 @@ function onWindowResize() {
 }
 window.addEventListener('resize', onWindowResize, false);
 
-// Double tap to reset orientation
-let lastTap = 0;
-xrCanvas.addEventListener('touchend', function(e) {
-    const currentTime = new Date().getTime();
-    const tapLength = currentTime - lastTap;
-    if (tapLength < 500 && tapLength > 0) {
-        resetOrientation();
-        // Also tell the worker to reset its filters
-        worker.postMessage({ reset: true });
-        e.preventDefault();
-    }
-    lastTap = currentTime;
-});
-
 function requestFullscreen() {
     if (xrCanvas.requestFullscreen) {
         xrCanvas.requestFullscreen();
@@ -438,6 +338,4 @@ function requestFullscreen() {
 xrCanvas.addEventListener('click', requestFullscreen);
 
 onWindowResize();
-addResetButton();
-initializeOrientationSystem();
 animate();
