@@ -119,9 +119,9 @@ function handleDeviceOrientation(event) {
     const quaternion = new THREE.Quaternion();
     quaternion.setFromEuler(euler);
 
-    console.log("ap:" + r2de(camera.rotation.x))
-    console.log(r2de(camera.rotation.y))
-    console.log(r2de(camera.rotation.z) + "paa")
+    console.log("ap:" + r2de(leftCamera.rotation.x))
+    console.log(r2de(leftCamera.rotation.y))
+    console.log(r2de(leftCamera.rotation.z) + "paa")
 
     worker.postMessage({ quaternion: quaternion.toArray() });
 }
