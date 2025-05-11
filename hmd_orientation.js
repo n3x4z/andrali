@@ -8,17 +8,17 @@ let complementaryFilterCoeff = 0.98; // Adjustable filter coefficient (0.98 work
 // Advanced complementary filter for non-Chromium browsers
 // This provides smooth, stable quaternion values with proper interpolation
 class ComplementaryFilter {
-  constructor() {
+  letructor() {
     // Initialize with identity quaternion
-    this.filteredQuaternion = [0, 0, 0, 1]; 
+    this.filteredQuaternion = [0, 0, 0, 1];
     this.lastUpdateTime = 0;
     this.prevRawQuaternion = [0, 0, 0, 1];
     this.isFirstUpdate = true;
-    
+
     // Different filter coefficients for different motion speeds
     this.fastFilterCoeff = 0.85; // More responsive for fast movements
     this.slowFilterCoeff = 0.98; // More stable for slow or no movement
-    
+
     // Threshold to detect rapid movement
     this.movementThreshold = 0.05;
   }
@@ -27,12 +27,12 @@ class ComplementaryFilter {
   quaternionDot(q1, q2) {
     return q1[0] * q2[0] + q1[1] * q2[1] + q1[2] * q2[2] + q1[3] * q2[3];
   }
-  
+
   // Properly interpolate between quaternions
   slerp(q1, q2, t) {
     // Ensure we're interpolating along shortest path
     let dot = this.quaternionDot(q1, q2);
-    
+
     // If quaternions are nearly opposite, we need to flip one
     if (dot < 0) {
       for (let i = 0; i < 4; i++) {
@@ -40,42 +40,42 @@ class ComplementaryFilter {
       }
       dot = -dot;
     }
-    
+
     // Handle nearly identical quaternions to avoid division by zero
     if (dot > 0.9995) {
-      const result = [0, 0, 0, 0];
+      let result = [0, 0, 0, 0];
       for (let i = 0; i < 4; i++) {
         result[i] = q1[i] + t * (q2[i] - q1[i]);
       }
       return this.normalize(result);
     }
-    
+
     // Standard SLERP formula
-    const theta0 = Math.acos(dot);
-    const theta = theta0 * t;
-    
-    const sinTheta = Math.sin(theta);
-    const sinTheta0 = Math.sin(theta0);
-    
-    const s0 = Math.cos(theta) - dot * sinTheta / sinTheta0;
-    const s1 = sinTheta / sinTheta0;
-    
-    const result = [0, 0, 0, 0];
+    let theta0 = Math.acos(dot);
+    let theta = theta0 * t;
+
+    let sinTheta = Math.sin(theta);
+    let sinTheta0 = Math.sin(theta0);
+
+    let s0 = Math.cos(theta) - dot * sinTheta / sinTheta0;
+    let s1 = sinTheta / sinTheta0;
+
+    let result = [0, 0, 0, 0];
     for (let i = 0; i < 4; i++) {
       result[i] = q1[i] * s0 + q2[i] * s1;
     }
-    
+
     return this.normalize(result);
   }
-  
+
   // Normalize a quaternion
   normalize(q) {
-    const magnitude = Math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
-    
+    let magnitude = Math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]);
+
     if (magnitude > 0.00001) {
-      return [q[0]/magnitude, q[1]/magnitude, q[2]/magnitude, q[3]/magnitude];
+      return [q[0] / magnitude, q[1] / magnitude, q[2] / magnitude, q[3] / magnitude];
     }
-    
+
     // Default to identity if we somehow got a zero quaternion
     return [0, 0, 0, 1];
   }
@@ -90,15 +90,15 @@ class ComplementaryFilter {
       return this.filteredQuaternion;
     }
 
-    const deltaTime = (timestamp - this.lastUpdateTime) / 1000; // Convert to seconds
+    let deltaTime = (timestamp - this.lastUpdateTime) / 1000; // Convert to seconds
     this.lastUpdateTime = timestamp;
 
     // Limit max deltaTime to prevent huge jumps after pausing/resuming
-    const effectiveDeltaTime = Math.min(deltaTime, 0.1);
-    
+    let effectiveDeltaTime = Math.min(deltaTime, 0.1);
+
     // Check how much the orientation has changed since last reading
-    const movementAmount = 1.0 - Math.abs(this.quaternionDot(this.prevRawQuaternion, newQuaternion));
-    
+    let movementAmount = 1.0 - Math.abs(this.quaternionDot(this.prevRawQuaternion, newQuaternion));
+
     // Choose filter coefficient based on movement speed
     let currentCoeff;
     if (movementAmount > this.movementThreshold) {
@@ -108,20 +108,20 @@ class ComplementaryFilter {
       // Slow/steady movement - more filtering
       currentCoeff = this.slowFilterCoeff;
     }
-    
+
     // Adjust coefficient based on time delta
-    const timeAdjustedCoeff = Math.pow(currentCoeff, effectiveDeltaTime * 60);
-    
+    let timeAdjustedCoeff = Math.pow(currentCoeff, effectiveDeltaTime * 60);
+
     // Use slerp for proper quaternion interpolation
     this.filteredQuaternion = this.slerp(
       this.filteredQuaternion,
       newQuaternion,
       1.0 - timeAdjustedCoeff
     );
-    
+
     // Save current raw quaternion for next comparison
     this.prevRawQuaternion = [...newQuaternion];
-    
+
     return this.filteredQuaternion;
   }
 
@@ -134,7 +134,7 @@ class ComplementaryFilter {
 }
 
 // Create complementary filter instance
-const filter = new ComplementaryFilter();
+let filter = new ComplementaryFilter();
 
 createModule().then((Module) => {
   console.log("Wasm Module loaded. Checking for OrientationCalculator...");
@@ -166,7 +166,8 @@ self.onmessage = (event) => {
     return;
   }
 
-  const { quaternion: inputQuaternion, reset } = event.data;
+  let { quaternion, reset } = event.data;
+  let inputQuaternion = quaternion;
 
   // Handle reset command if sent
   if (reset) {
@@ -179,7 +180,7 @@ self.onmessage = (event) => {
     try {
       // Check if browser is chromium or if we need to apply our filter
       // We'll infer this from whether timestamp data is provided
-      const timestamp = event.data.timestamp || performance.now();
+      let timestamp = event.data.timestamp || performance.now();
 
       // Process the quaternion based on source
       let processedQuaternion;
@@ -193,7 +194,7 @@ self.onmessage = (event) => {
           lastProcessedQuaternion = [...inputQuaternion];
         } else {
           // Check if the quaternion suddenly flipped sign (indicates a 180° rotation issue)
-          const dot =
+          let dot =
             inputQuaternion[0] * lastProcessedQuaternion[0] +
             inputQuaternion[1] * lastProcessedQuaternion[1] +
             inputQuaternion[2] * lastProcessedQuaternion[2] +
@@ -224,14 +225,14 @@ self.onmessage = (event) => {
       );
 
       // Get the quaternion back from C++
-      const resultFromCpp = calculator.getQuaternion();
+      let resultFromCpp = calculator.getQuaternion();
       let quaternionToPost;
 
       if (Array.isArray(resultFromCpp)) {
         quaternionToPost = resultFromCpp;
       } else if (resultFromCpp && typeof resultFromCpp.size === 'function' && typeof resultFromCpp.get === 'function') {
-        const tempArray = [];
-        const size = resultFromCpp.size();
+        let tempArray = [];
+        let size = resultFromCpp.size();
         for (let i = 0; i < size; i++) {
           tempArray.push(resultFromCpp.get(i));
         }
