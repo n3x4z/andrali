@@ -4,13 +4,11 @@ let calculator;
 let moduleReady = false;
 
 createModule().then((Module) => {
-  console.log("Wasm Module loaded. Checking for OrientationCalculator...");
+  console.log("Browser is WASM compatible :D");
   if (Module && Module.OrientationCalculator) {
     calculator = new Module.OrientationCalculator();
-    console.log("OrientationCalculator instantiated:", calculator);
     if (calculator && typeof calculator.getQuaternion === 'function' && typeof calculator.updateQuaternion === 'function') {
       moduleReady = true;
-      console.log("Worker is ready and calculator is functional.");
       // self.postMessage({ status: "worker_ready" }); // Optional: notify main thread
     } else {
       console.error("Calculator instance is invalid or methods are missing.");

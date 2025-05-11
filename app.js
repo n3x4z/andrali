@@ -107,13 +107,21 @@ distortionScene.add(rightDistortionMesh);
 function handleDeviceOrientation(event) {
     if (event.alpha === null || event.beta === null || event.gamma === null) return;
 
+    console.log("st: " + event.alpha)
+    console.log(event.beta)
+    console.log(event.gamma + "ls")
+
     const alpha = THREE.MathUtils.degToRad(event.alpha);
     const beta = THREE.MathUtils.degToRad(event.beta);
     const gamma = THREE.MathUtils.degToRad(event.gamma);
 
-    const euler = new THREE.Euler(alpha, gamma, beta, 'XYZ');
+    const euler = new THREE.Euler(beta, gamma, alpha, 'XYZ');
     const quaternion = new THREE.Quaternion();
     quaternion.setFromEuler(euler);
+
+    console.log("ap:" + r2de(camera.rotation.x))
+    console.log(r2de(camera.rotation.y))
+    console.log(r2de(camera.rotation.z) + "paa")
 
     worker.postMessage({ quaternion: quaternion.toArray() });
 }
