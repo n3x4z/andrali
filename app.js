@@ -104,128 +104,129 @@ const distortionScene = new THREE.Scene();
 distortionScene.add(leftDistortionMesh);
 distortionScene.add(rightDistortionMesh);
 
-function handleDeviceOrientation(event) {
-    if (event.alpha === null || event.beta === null || event.gamma === null) return;
+let accelerometer = null;
+let gyroscope = null;
+let lastQuaternion = new THREE.Quaternion(); // Store the previous quaternion
+let baseQuaternion = new THREE.Quaternion();
+let isTracking = false;
 
-    console.log("st: " + event.alpha)
-    console.log(event.beta)
-    console.log(event.gamma + "ls")
-
-    const alpha = THREE.MathUtils.degToRad(event.alpha);
-    const beta = THREE.MathUtils.degToRad(event.beta);
-    const gamma = THREE.MathUtils.degToRad(event.gamma);
-
-    const euler = new THREE.Euler(beta, gamma, alpha, 'XYZ');
-    const quaternion = new THREE.Quaternion();
-    quaternion.setFromEuler(euler);
-
-    console.log("ap:" + r2de(leftCamera.rotation.x))
-    console.log(r2de(leftCamera.rotation.y))
-    console.log(r2de(leftCamera.rotation.z) + "paa")
-
-    worker.postMessage({ quaternion: quaternion.toArray() });
+function handleSensorData(accelData, gyroData, timestamp) {
+    worker.postMessage({ accelerometer: accelData, gyroscope: gyroData, timestamp: timestamp });
 }
 
-function initializeDeviceOrientation() {
-    if (typeof DeviceOrientationEvent !== 'undefined') {
-        if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-            output.innerHTML = "Click the screen to enable DeviceOrientation.";
-            xrCanvas.addEventListener('click', requestDeviceOrientationPermission);
-        } else {
-            startDeviceOrientation();
-        }
-    } else {
-        output.innerHTML = "DeviceOrientation API not supported.";
-        console.error("DeviceOrientation API not supported.");
+function initializeDeviceMotion() {
+    if (typeof window.Accelerometer === 'undefined' || typeof window.Gyroscope === 'undefined') {
+        output.innerHTML = "Accelerometer or Gyroscope API not supported.";
+        console.error("Accelerometer or Gyroscope API not supported.");
+        return;
     }
-}
 
-function requestDeviceOrientationPermission() {
-    DeviceOrientationEvent.requestPermission()
-        .then(permissionState => {
-            if (permissionState === 'granted') {
-                startDeviceOrientation();
-                output.innerHTML = "DeviceOrientation started. Move your device.";
-            } else {
-                output.innerHTML = "Permission for DeviceOrientation denied.";
-            }
-        })
-        .catch(error => {
-            output.innerHTML = "Error requesting DeviceOrientation permission: " + error;
-            console.error(error);
-        });
-    xrCanvas.removeEventListener('click', requestDeviceOrientationPermission);
-}
-
-function startDeviceOrientation() {
-    window.addEventListener('deviceorientation', handleDeviceOrientation);
-    output.innerHTML = "DeviceOrientation started. Move your device.";
-}
-
-if (window.RelativeOrientationSensor) {
     Promise.all([
         navigator.permissions.query({ name: 'accelerometer' }),
         navigator.permissions.query({ name: 'gyroscope' })
     ]).then(results => {
         if (results.every(result => result.state === 'granted' || result.state === 'prompt')) {
-            initializeSensor();
-        } else {
-            output.innerHTML = "Permissions not granted. Falling back to DeviceOrientation.";
-            initializeDeviceOrientation();
-        }
-    }).catch(error => {
-        output.innerHTML = "Permission query failed. Falling back to DeviceOrientation.";
-        initializeDeviceOrientation();
-    });
-} else {
-    initializeDeviceOrientation();
-}
+            try {
+                accelerometer = new Accelerometer({ frequency: 60, referenceFrame: 'device' });
+                gyroscope = new Gyroscope({ frequency: 60, referenceFrame: 'device' });
 
-function initializeSensor() {
-    try {
-        const options = { frequency: 120, referenceFrame: 'device' };
-        const sensor = new RelativeOrientationSensor(options);
+                accelerometer.addEventListener('reading', () => {
+                    if (gyroscope) {
+                        handleSensorData(
+                            { x: accelerometer.x, y: accelerometer.y, z: accelerometer.z },
+                            { x: gyroscope.x, y: gyroscope.y, z: gyroscope.z },
+                            Date.now()
+                        );
+                    }
+                });
 
-        sensor.addEventListener('reading', () => {
-            if (sensor.quaternion) {
-                worker.postMessage({ quaternion: sensor.quaternion });
+                gyroscope.addEventListener('reading', () => {
+                    if (accelerometer) {
+                        handleSensorData(
+                            { x: accelerometer.x, y: accelerometer.y, z: accelerometer.z },
+                            { x: gyroscope.x, y: gyroscope.y, z: gyroscope.z },
+                            Date.now()
+                        );
+                    }
+                });
+
+                accelerometer.addEventListener('error', (event) => {
+                    output.innerHTML = "Accelerometer error: " + event.error.message;
+                    console.error("Accelerometer error:", event.error);
+                });
+
+                gyroscope.addEventListener('error', (event) => {
+                    output.innerHTML = "Gyroscope error: " + event.error.message;
+                    console.error("Gyroscope error:", event.error);
+                });
+                accelerometer.start();
+                gyroscope.start();
+                isTracking = true;
+                output.innerHTML = "Device motion tracking started. Move your device.";
+
+            } catch (error) {
+                output.innerHTML = "Error initializing sensors: " + error.message;
+                console.error("Error initializing sensors:", error);
             }
-        });
 
-        sensor.addEventListener('error', (event) => {
-            output.innerHTML = `Sensor Error: ${event.error.name} - ${event.error.message}. Falling back to DeviceOrientation.`;
-            console.error('Sensor Error:', event.error);
-            initializeDeviceOrientation();
-        });
-
-        sensor.start();
-        output.innerHTML = "RelativeOrientationSensor started. Move your device.";
-
-    } catch (error) {
-        output.innerHTML = `Error initializing sensor: ${error.name} - ${error.message}. Falling back to DeviceOrientation.`;
-        console.error('Error initializing sensor:', error);
-        initializeDeviceOrientation();
-    }
+        } else {
+            output.innerHTML = "Permissions not granted for accelerometer or gyroscope.";
+            console.error("Permissions not granted for accelerometer or gyroscope.");
+        }
+    });
 }
+function resetBaseOrientation() {
+  baseQuaternion.copy(lastQuaternion);
+  output.innerHTML = "Base orientation reset. Move your device.";
+}
+
+function handleResetClick() {
+    resetBaseOrientation();
+}
+
+xrCanvas.addEventListener('click', () => {
+    if (!isTracking) {
+        initializeDeviceMotion();
+    }
+    requestFullscreen();
+});
+
+const resetButton = document.createElement('button');
+resetButton.textContent = 'Reset Orientation';
+resetButton.style.position = 'absolute';
+resetButton.style.top = '10px';
+resetButton.style.left = '50%';
+resetButton.style.transform = 'translateX(-50%)';
+document.body.appendChild(resetButton);
+resetButton.addEventListener('click', handleResetClick);
+
 
 worker.onmessage = (event) => {
-    const { quaternion: receivedQuaternion } = event.data;
+    const { quaternion: receivedQuaternion, error } = event.data;
+
+    if (error) {
+        output.innerHTML = "Worker error: " + error;
+        console.error("Worker error:", error);
+        return;
+    }
 
     if (receivedQuaternion && receivedQuaternion.length === 4) {
-        const originalX = receivedQuaternion[0];
-        receivedQuaternion[0] = -receivedQuaternion[1];
-        receivedQuaternion[1] = originalX;
+        const newQuaternion = new THREE.Quaternion(receivedQuaternion[0], receivedQuaternion[1], receivedQuaternion[2], receivedQuaternion[3]);
 
-        setStereoCameraTransforms(leftCamera, receivedQuaternion, -eyeSeparation / 2);
-        setStereoCameraTransforms(rightCamera, receivedQuaternion, eyeSeparation / 2);
+        // Calculate the relative rotation from the base orientation.
+        const relativeQuaternion = new THREE.Quaternion();
+        relativeQuaternion.multiplyQuaternions(baseQuaternion.clone().invert(), newQuaternion);
+        lastQuaternion.copy(newQuaternion); // store
+
+        setStereoCameraTransforms(leftCamera, relativeQuaternion.toArray(), -eyeSeparation / 2);
+        setStereoCameraTransforms(rightCamera, relativeQuaternion.toArray(), eyeSeparation / 2);
 
         const euler = new THREE.Euler().setFromQuaternion(leftCamera.quaternion, leftCamera.rotation.order);
         display_euler_x = euler.x;
         display_euler_y = euler.y;
         display_euler_z = euler.z;
 
-        output.innerHTML = `Quaternion: ${receivedQuaternion.map(n => n.toFixed(2)).join(', ')}<br>`;
-        output.innerHTML += `Euler X: ${r2de(display_euler_x).toFixed(2)}, Y: ${r2de(display_euler_y).toFixed(2)}, Z: ${r2de(display_euler_z).toFixed(2)}`;
+        output.innerHTML = `Euler X: ${r2de(display_euler_x).toFixed(2)}, Y: ${r2de(display_euler_y).toFixed(2)}, Z: ${r2de(display_euler_z).toFixed(2)}`;
     }
 };
 
@@ -298,7 +299,6 @@ function requestFullscreen() {
     }
 }
 
-xrCanvas.addEventListener('click', requestFullscreen);
 
 onWindowResize();
 animate();
